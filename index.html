@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<!--
+  index.html
+  用途：網站的「骨架」。瀏覽器會先讀這個檔案，再載入 styles.css（外觀）和 app.js（資料與互動）。
+  這是一個純靜態網頁，不需要伺服器也能開啟；之後可直接放到 GitHub Pages。
+-->
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport 讓手機、平板能正確縮放，而不是顯示成縮小的電腦版 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="天地福音堂崇拜部 Portal：查看更表、預備崇拜、提交家事與相關文件。"
+    />
+    <title>天地福音堂｜崇拜部 Portal</title>
+
+    <!-- 免費中文字型：標題用襯線體（較莊重），內文用無襯線體（較易讀） -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- 連結樣式表：所有顏色、間距、手機版面都寫在 styles.css -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <!-- 頂部導覽列：各頁面錨點都在同一頁，方便第一版預覽 -->
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#home">
+          <!-- 簡單十字架 SVG，不使用外部圖片 -->
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <rect x="10" y="3" width="4" height="18" rx="1"></rect>
+              <rect x="4" y="9" width="16" height="4" rx="1"></rect>
+            </svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">天地福音堂</span>
+            <span class="brand-sub">崇拜部 Portal</span>
+          </span>
+        </a>
+
+        <!-- 手機版選單按鈕：電腦版會隱藏 -->
+        <button
+          class="menu-toggle"
+          type="button"
+          aria-label="開啟選單"
+          aria-expanded="false"
+          aria-controls="site-nav"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <nav id="site-nav" class="site-nav" aria-label="主要導覽">
+          <a href="#home">首頁</a>
+          <a href="#roster">更表</a>
+          <a href="#prep">崇拜預備</a>
+          <a href="#housework">家事</a>
+          <a href="#docs">文件庫</a>
+          <a href="#admin">管理員</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- 首頁：教會名稱、歡迎字句、下一次崇拜、功能按鈕 -->
+      <section id="home" class="hero">
+        <p class="eyebrow">崇拜部同工專用入口</p>
+        <h1>天地福音堂｜崇拜部 Portal</h1>
+        <p class="welcome" id="welcome-text">
+          <!-- 歡迎字句由 app.js 填入，方便日後只改資料、不用改 HTML -->
+        </p>
+      </section>
+
+      <section class="section" aria-labelledby="next-service-title">
+        <div class="section-heading">
+          <h2 id="next-service-title">下一次崇拜</h2>
+          <p>本週服事崗位一覽，資料可在 app.js 更新。</p>
+        </div>
+
+        <!-- 下一次崇拜資訊卡：內容由 JavaScript 根據 data.nextService 產生 -->
+        <article class="service-card" id="next-service-card"></article>
+      </section>
+
+      <section class="section" aria-labelledby="actions-title">
+        <div class="section-heading">
+          <h2 id="actions-title">常用功能</h2>
+          <p>第一版先用佔位連結，日後可改成 Google 表單或簡報網址。</p>
+        </div>
+
+        <!-- 常用功能按鈕：網址來自 app.js 的 data.links -->
+        <div class="action-grid" id="action-buttons"></div>
+      </section>
+
+      <!-- 本月崇拜更表 -->
+      <section id="roster" class="section" aria-labelledby="roster-title">
+        <div class="section-heading">
+          <h2 id="roster-title">本月崇拜更表</h2>
+          <p id="roster-month-label"></p>
+        </div>
+        <!-- 表格外層加 scroll，手機可左右滑動，避免欄位被擠壞 -->
+        <div class="table-wrap">
+          <table class="roster-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>講題</th>
+                <th>MC</th>
+                <th>敬拜主領</th>
+                <th>結他</th>
+                <th>IT</th>
+                <th>聖餐牧師</th>
+                <th>聖餐安排</th>
+              </tr>
+            </thead>
+            <tbody id="roster-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 近日待辦：歌單初稿、家事截止、PPT 定稿 -->
+      <section id="prep" class="section" aria-labelledby="todo-title">
+        <div class="section-heading">
+          <h2 id="todo-title">近日待辦事項</h2>
+          <p>崇拜預備相關時程，提醒同工按時完成。</p>
+        </div>
+        <ul class="todo-list" id="todo-list"></ul>
+      </section>
+
+      <!-- 歌單初稿：日後會像家事一樣，用 Google Form 提交 -->
+      <section id="song-draft" class="section" aria-labelledby="song-draft-title">
+        <div class="section-heading">
+          <h2 id="song-draft-title">歌單初稿提交</h2>
+          <p>請主領於截止前以表單提交本週歌單。</p>
+        </div>
+        <div class="info-panel">
+          <p>
+            第一版尚未連接表單。之後可把「提交歌單初稿」按鈕改成 Google Form
+            連結，用法會與提交家事相同。
+          </p>
+          <a class="panel-link" id="song-draft-button" href="#">提交歌單初稿</a>
+        </div>
+      </section>
+
+      <!-- 家事：第一版只做說明區塊，提交按鈕連到佔位連結 -->
+      <section id="housework" class="section" aria-labelledby="housework-title">
+        <div class="section-heading">
+          <h2 id="housework-title">家事</h2>
+          <p>收集主日家事、代禱與感恩事項。</p>
+        </div>
+        <div class="info-panel">
+          <p>
+            請於截止日前把家事交給崇拜部。第一版尚未連接表單，之後可把
+            「提交家事」按鈕改成 Google Form 連結。
+          </p>
+          <a class="panel-link" id="housework-button" href="#">提交家事</a>
+        </div>
+      </section>
+
+      <!-- 文件庫：佔位說明，日後可改成 Google Drive 資料夾 -->
+      <section id="docs" class="section" aria-labelledby="docs-title">
+        <div class="section-heading">
+          <h2 id="docs-title">文件庫</h2>
+          <p>歌單、流程、守則與常用範本。</p>
+        </div>
+        <div class="info-panel">
+          <p>
+            文件庫將於下一版本接上 Google Drive 或共用資料夾。現階段請先透過
+            崇拜部同工索取所需檔案。
+          </p>
+        </div>
+      </section>
+
+      <!-- 管理員：不做真實登入，只保留入口說明 -->
+      <section id="admin" class="section" aria-labelledby="admin-title">
+        <div class="section-heading">
+          <h2 id="admin-title">管理員</h2>
+          <p>第一版只做前端介面，尚未連接登入或後台。</p>
+        </div>
+        <div class="info-panel">
+          <p>
+            日後可用 Google 試算表或 Apps Script 管理更表與家事。現階段無需登入，
+            所有顯示內容都來自 app.js 的假資料。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>天地福音堂｜崇拜部 Portal</p>
+    </footer>
+
+    <!-- 網頁邏輯與假資料都在 app.js；放在 </body> 前，確保 HTML 已載入 -->
+    <script src="app.js"></script>
+  </body>
+</html>
