@@ -144,10 +144,13 @@ const data = {
   */
   links: {
     roster: "#", // 日後可貼上 Google Drive / Google Sheets 更表連結
-    changeRequest: "#", // 日後可貼上 Google Form「申請改更」連結
-    songDraft: "#", // 日後可貼上 Google Form「提交歌單初稿」連結
-    housework: "#", // 日後可貼上 Google Form「提交家事」連結
-    ppt: "#" // 日後可貼上 Google Slides 或 Apps Script 網頁連結
+    changeRequest:
+      "https://docs.google.com/forms/d/e/1FAIpQLSf8GXdgNfydA0QzMfdnzz0rWkBmdrmk_mSj71BgWwQ1_esFVQ/viewform?usp=dialog",
+    songDraft:
+      "https://docs.google.com/forms/d/e/1FAIpQLSe5Acu7wAlKFRg9HM2bKTJVPmNHWVmIS9UjWdS41bYlOJw0JA/viewform?usp=dialog",
+    housework:
+      "https://docs.google.com/forms/d/e/1FAIpQLSdHRNfqnBavKMPRqP0DGK6qulzRqg9Tb5IgtKiW6ViK96MhfQ/viewform?usp=dialog",
+    ppt: "https://docs.google.com/presentation/d/1lBh-eI49IEBJeBHu3VOE745zzQ3zn4N32oblICQ8h08/edit?usp=sharing"
   }
 };
 
@@ -508,15 +511,17 @@ function renderActions() {
   ];
 
   $("#action-buttons").innerHTML = actions
-    .map(
-      (item) => `
-        <a class="action-btn" href="${item.href}">
+    .map((item) => {
+      const isExternal = /^https?:\/\//i.test(item.href);
+      const extra = isExternal ? ' target="_blank" rel="noopener noreferrer"' : "";
+      return `
+        <a class="action-btn" href="${item.href}"${extra}>
           ${item.icon}
           <strong>${item.title}</strong>
           <span>${item.desc}</span>
         </a>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
@@ -614,10 +619,19 @@ function setupActiveNav() {
   update();
 }
 
+function applyExternalLink(el, url) {
+  if (!el) return;
+  el.href = url;
+  if (/^https?:\/\//i.test(url)) {
+    el.target = "_blank";
+    el.rel = "noopener noreferrer";
+  }
+}
+
 /* ---------- 把說明區塊裡的提交按鈕，接到同一個 data.links ---------- */
 function setupFormButtons() {
-  $("#song-draft-button").href = data.links.songDraft;
-  $("#housework-button").href = data.links.housework;
+  applyExternalLink($("#song-draft-button"), data.links.songDraft);
+  applyExternalLink($("#housework-button"), data.links.housework);
 }
 
 /* ---------- 網頁載入完成後，依序把各區塊畫出來 ---------- */
