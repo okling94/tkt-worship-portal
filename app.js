@@ -53,15 +53,15 @@ const data = {
 
   // 下一次崇拜資訊卡
   nextService: {
-    date: "2026年9月20日（日）",
-    time: "上午 11:00",
+    date: "2026年9月19日（六）",
+    time: "下午 20:00",
     theme: "在主裡重新得力",
-    mc: "陳曉晴",
-    worshipLeader: "林子軒",
-    guitar: "黃志偉",
-    it: "張恩祈",
-    communionPastor: "李牧師",
-    communionArrangement: "蔡恩慈"
+    mc: "天地會",
+    worshipLeader: "天地會",
+    guitar: "天地會",
+    it: "天地會",
+    communionPastor: "天地會",
+    communionArrangement: "天地會"
   },
 
   // 本月崇拜更表（表格會依陣列順序顯示）
@@ -70,40 +70,40 @@ const data = {
     {
       date: "9月6日",
       theme: "恩典夠用",
-      mc: "王嘉琳",
-      worshipLeader: "周信",
-      guitar: "吳浩然",
-      it: "鄭一諾",
+      mc: "天地會",
+      worshipLeader: "天地會",
+      guitar: "天地會",
+      it: "天地會",
       communionPastor: "—",
       communionArrangement: "—"
     },
     {
       date: "9月13日",
       theme: "行走在光中",
-      mc: "何詠思",
-      worshipLeader: "陳曉晴",
-      guitar: "黃志偉",
-      it: "張恩祈",
+      mc: "天地會",
+      worshipLeader: "天地會",
+      guitar: "天地會",
+      it: "天地會",
       communionPastor: "—",
       communionArrangement: "—"
     },
     {
       date: "9月20日",
       theme: "在主裡重新得力",
-      mc: "陳曉晴",
-      worshipLeader: "林子軒",
-      guitar: "黃志偉",
-      it: "張恩祈",
-      communionPastor: "李牧師",
-      communionArrangement: "蔡恩慈"
+      mc: "天地會",
+      worshipLeader: "天地會",
+      guitar: "天地會",
+      it: "天地會",
+      communionPastor: "天地會",
+      communionArrangement: "天地會"
     },
     {
       date: "9月27日",
       theme: "彼此相愛",
-      mc: "劉子晴",
-      worshipLeader: "周信",
-      guitar: "吳浩然",
-      it: "鄭一諾",
+      mc: "天地會",
+      worshipLeader: "天地會",
+      guitar: "天地會",
+      it: "天地會",
       communionPastor: "—",
       communionArrangement: "—"
     }
