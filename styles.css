@@ -228,6 +228,23 @@ main {
   color: var(--muted);
 }
 
+/* 更表同步狀態：低調、不搶主視覺 */
+.sync-status {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.schedule-notice {
+  margin-top: 0.55rem;
+  font-size: 0.86rem;
+  color: var(--todo-open);
+}
+
+.schedule-notice[hidden] {
+  display: none;
+}
+
 /* ---------- 下一次崇拜資訊卡 ---------- */
 .service-card {
   background: var(--paper);

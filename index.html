@@ -83,6 +83,10 @@
         <div class="section-heading">
           <h2 id="next-service-title">下一次崇拜</h2>
           <p>本週服事崗位一覽，資料可在 app.js 更新。</p>
+          <!-- API 失敗時才顯示；成功或使用 placeholder 時保持隱藏 -->
+          <p class="schedule-notice" id="schedule-fallback-notice" hidden aria-live="polite">
+            目前顯示暫存更表，請稍後重新整理。
+          </p>
         </div>
 
         <!-- 下一次崇拜資訊卡：內容由 JavaScript 根據 data.nextService 產生 -->
@@ -104,6 +108,7 @@
         <div class="section-heading">
           <h2 id="roster-title">本月崇拜更表</h2>
           <p id="roster-month-label"></p>
+          <p class="sync-status" id="roster-sync-status" aria-live="polite"></p>
         </div>
         <!-- 表格外層加 scroll，手機可左右滑動，避免欄位被擠壞 -->
         <div class="table-wrap">
@@ -111,7 +116,7 @@
             <thead>
               <tr>
                 <th>日期</th>
-                <th>講題</th>
+                <th>講道</th>
                 <th>MC</th>
                 <th>敬拜主領</th>
                 <th>結他</th>

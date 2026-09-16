@@ -1,7 +1,40 @@
+// ===== Google Apps Script 公開更表 API =====
+// 這是公開 Web App 網址（以 /exec 結尾），不是密碼、API Key、Sheet ID 或電郵。
+// 若仍為「我稍後會貼上 /exec URL」，網站不會發請求，繼續使用下方假資料。
+const SCHEDULE_API_URL =
+  "https://script.google.com/macros/s/AKfycbyRZ5MkUwpqAJHoiVZ4HNcQaPA3z4UctmDhTVhtMzinVNO28YTuGArxedjaO4gEwGS13g/exec";
+
+const SCHEDULE_JSONP_SCRIPT_ID = "portal-schedule-jsonp";
+const SCHEDULE_TIMEOUT_MS = 20000;
+
+// 只會讀取／顯示這些公開崇拜欄位，忽略電郵、電話、改更、家事等其他資料
+const PUBLIC_SCHEDULE_FIELDS = [
+  "崇拜ID",
+  "日期",
+  "主持（MC）",
+  "MC",
+  "敬拜主領",
+  "敬拜結他",
+  "IT（PowerPoint）",
+  "IT",
+  "領聖餐牧師",
+  "聖餐安排",
+  "講道",
+  "講題",
+  "經文",
+  "歌單連結",
+  "程序表連結",
+  "PPT連結",
+  "資料夾連結",
+  "狀態",
+  "最後更新"
+];
+
 /*
   app.js
   用途：存放網站資料，並把資料填進 index.html 的空位。
-  第一版沒有真實登入、沒有資料庫、也沒有連接 Google API。
+  第一版沒有真實登入、沒有資料庫。更表可選擇以 JSONP 讀取公開的 Apps Script Web App；
+  若網址未設定或載入失敗，會自動改用下方假資料，頁面不會壞掉。
   初學者提示：想改日期、人名、講題，只需要改下面的 data 物件。
 */
 
@@ -123,6 +156,281 @@ function $(selector) {
   return document.querySelector(selector);
 }
 
+let scheduleFromApi = false;
+let scheduleRequestTimer = null;
+const fallbackSnapshot = {
+  nextService: JSON.parse(JSON.stringify(data.nextService)),
+  roster: JSON.parse(JSON.stringify(data.roster)),
+  rosterMonth: data.rosterMonth
+};
+
+function isScheduleApiConfigured() {
+  const url = String(SCHEDULE_API_URL || "").trim();
+  if (!url) return false;
+  if (url.includes("我稍後會貼上")) return false;
+  return /\/exec\/?$/i.test(url.split("?")[0]);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function parseISODate(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function getTodayHongKong() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
+function formatLongDate(value) {
+  const date = parseISODate(value);
+  if (!date) return String(value || "").trim() || "待定";
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdays[date.getDay()]}）`;
+}
+
+function formatShortDate(value) {
+  const date = parseISODate(value);
+  if (!date) return String(value || "").trim() || "待定";
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function displayTheme(value) {
+  const text = String(value ?? "").trim();
+  return text ? text : "待定";
+}
+
+function displayRole(value) {
+  const text = String(value ?? "").trim();
+  return text ? text : "—";
+}
+
+function displayCommunionPastor(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === "-" || text === "－") return "—";
+  return text;
+}
+
+function readPublicField(row, keys) {
+  if (!row || typeof row !== "object") return "";
+  for (let i = 0; i < keys.length; i += 1) {
+    if (Object.prototype.hasOwnProperty.call(row, keys[i])) {
+      return row[keys[i]];
+    }
+  }
+  return "";
+}
+
+function pickPublicRow(row) {
+  const publicRow = {};
+  if (!row || typeof row !== "object") return publicRow;
+  PUBLIC_SCHEDULE_FIELDS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(row, key)) {
+      publicRow[key] = row[key];
+    }
+  });
+  return publicRow;
+}
+
+function setScheduleSyncStatus(text) {
+  const el = $("#roster-sync-status");
+  if (el) el.textContent = text;
+}
+
+function showFallbackNotice(visible) {
+  const el = $("#schedule-fallback-notice");
+  if (!el) return;
+  if (visible) el.removeAttribute("hidden");
+  else el.setAttribute("hidden", "");
+}
+
+function useFallbackSchedule(showNotice) {
+  data.nextService = JSON.parse(JSON.stringify(fallbackSnapshot.nextService));
+  data.roster = JSON.parse(JSON.stringify(fallbackSnapshot.roster));
+  data.rosterMonth = fallbackSnapshot.rosterMonth;
+  scheduleFromApi = false;
+  if ($("#next-service-card")) renderNextService();
+  if ($("#roster-body")) renderRoster();
+  setScheduleSyncStatus("資料來源：網站暫存資料");
+  showFallbackNotice(Boolean(showNotice));
+}
+
+function mapApiRowToRoster(row) {
+  return {
+    isoDate: String(readPublicField(row, ["日期"]) || "").trim(),
+    date: formatShortDate(readPublicField(row, ["日期"])),
+    theme: displayTheme(readPublicField(row, ["講道"])),
+    mc: displayRole(readPublicField(row, ["主持（MC）", "MC"])),
+    worshipLeader: displayRole(readPublicField(row, ["敬拜主領"])),
+    guitar: displayRole(readPublicField(row, ["敬拜結他"])),
+    it: displayRole(readPublicField(row, ["IT（PowerPoint）", "IT"])),
+    communionPastor: displayCommunionPastor(readPublicField(row, ["領聖餐牧師"])),
+    communionArrangement: displayCommunionPastor(readPublicField(row, ["聖餐安排"]))
+  };
+}
+
+function mapApiRowToNextService(row) {
+  return {
+    isoDate: String(readPublicField(row, ["日期"]) || "").trim(),
+    date: formatLongDate(readPublicField(row, ["日期"])),
+    time: (data.nextService && data.nextService.time) || "上午 11:00",
+    theme: displayTheme(readPublicField(row, ["講道"])),
+    preacher: displayTheme(readPublicField(row, ["講道"])),
+    scripture: displayTheme(readPublicField(row, ["經文"])),
+    mc: displayRole(readPublicField(row, ["主持（MC）", "MC"])),
+    worshipLeader: displayRole(readPublicField(row, ["敬拜主領"])),
+    guitar: displayRole(readPublicField(row, ["敬拜結他"])),
+    it: displayRole(readPublicField(row, ["IT（PowerPoint）", "IT"])),
+    communionPastor: displayCommunionPastor(readPublicField(row, ["領聖餐牧師"])),
+    communionArrangement: displayCommunionPastor(readPublicField(row, ["聖餐安排"]))
+  };
+}
+
+function pickNextServiceRow(rows, todayHongKong) {
+  return rows.find((row) => {
+    const iso = String(readPublicField(row, ["日期"]) || "").trim();
+    return iso >= todayHongKong;
+  }) || null;
+}
+
+/* 只供 Console 開發測試，不會改畫面或 data.nextService */
+window.testNextServiceDate = function (dateString) {
+  const rows = Array.isArray(data.schedule)
+    ? data.schedule
+        .map(pickPublicRow)
+        .filter((row) => String(readPublicField(row, ["日期"]) || "").trim())
+        .sort((a, b) =>
+          String(readPublicField(a, ["日期"])).localeCompare(String(readPublicField(b, ["日期"])))
+        )
+    : [];
+  const nextRow = pickNextServiceRow(rows, String(dateString || "").trim());
+  const nextDate = nextRow ? String(readPublicField(nextRow, ["日期"]) || "").trim() : null;
+  console.log("下一次崇拜：", nextDate);
+  return nextDate;
+};
+
+function deriveRosterMonthLabel(rows) {
+  const months = [];
+  rows.forEach((row) => {
+    const date = parseISODate(readPublicField(row, ["日期"]));
+    if (!date) return;
+    const label = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+    if (!months.includes(label)) months.push(label);
+  });
+  if (months.length === 1) return months[0];
+  if (months.length > 1) return "近期崇拜";
+  return data.rosterMonth;
+}
+
+function buildScheduleRequestUrl() {
+  const base = String(SCHEDULE_API_URL || "").trim();
+  const joiner = base.includes("?") ? "&" : "?";
+  return `${base}${joiner}action=schedule&callback=portalScheduleCallback&_=${Date.now()}`;
+}
+
+function applyLiveSchedule(payload) {
+  data.schedule = payload.schedule;
+
+  const rows = data.schedule
+    .map(pickPublicRow)
+    .filter((row) => String(readPublicField(row, ["日期"]) || "").trim())
+    .sort((a, b) =>
+      String(readPublicField(a, ["日期"])).localeCompare(String(readPublicField(b, ["日期"])))
+    );
+
+  if (!rows.length) {
+    useFallbackSchedule(true);
+    return;
+  }
+
+  const todayHongKong = getTodayHongKong();
+  const nextRow = pickNextServiceRow(rows, todayHongKong);
+  data.roster = rows.map(mapApiRowToRoster);
+  data.nextService = nextRow ? mapApiRowToNextService(nextRow) : null;
+  data.rosterMonth = deriveRosterMonthLabel(rows);
+  scheduleFromApi = true;
+
+  console.log("香港今天日期：", todayHongKong);
+  console.log("下一次崇拜：", data.nextService);
+
+  renderNextService();
+  renderRoster();
+  setScheduleSyncStatus(`最後同步：${payload.updatedAt || "—"}`);
+  showFallbackNotice(false);
+}
+
+function loadScheduleFromApi() {
+  window.portalScheduleCallback = function (payload) {
+    console.log("Schedule payload:", payload);
+
+    if (scheduleRequestTimer) {
+      clearTimeout(scheduleRequestTimer);
+      scheduleRequestTimer = null;
+    }
+
+    const loadedScript = document.getElementById(SCHEDULE_JSONP_SCRIPT_ID);
+    if (loadedScript) loadedScript.remove();
+
+    try {
+      if (!payload || payload.ok !== true || !Array.isArray(payload.schedule)) {
+        useFallbackSchedule(true);
+        return;
+      }
+      applyLiveSchedule(payload);
+    } catch (error) {
+      console.error("Schedule API error:", error);
+      useFallbackSchedule(true);
+    }
+  };
+
+  if (!isScheduleApiConfigured()) {
+    useFallbackSchedule(false);
+    return;
+  }
+
+  const oldScript = document.getElementById(SCHEDULE_JSONP_SCRIPT_ID);
+  if (oldScript) oldScript.remove();
+
+  if (scheduleRequestTimer) {
+    clearTimeout(scheduleRequestTimer);
+    scheduleRequestTimer = null;
+  }
+
+  const requestUrl = buildScheduleRequestUrl();
+  console.log("Schedule API URL:", requestUrl);
+
+  scheduleRequestTimer = setTimeout(() => {
+    scheduleRequestTimer = null;
+    const pending = document.getElementById(SCHEDULE_JSONP_SCRIPT_ID);
+    if (pending) pending.remove();
+    console.error("Schedule API error:", "timeout");
+    useFallbackSchedule(true);
+  }, SCHEDULE_TIMEOUT_MS);
+
+  const script = document.createElement("script");
+  script.id = SCHEDULE_JSONP_SCRIPT_ID;
+  script.async = true;
+  script.charset = "UTF-8";
+  script.src = requestUrl;
+  script.onerror = function (error) {
+    console.error("Schedule API error:", error);
+  };
+  document.head.appendChild(script);
+}
+
 /* ---------- 填入歡迎字句 ---------- */
 function renderWelcome() {
   $("#welcome-text").textContent = data.church.welcome;
@@ -131,21 +439,35 @@ function renderWelcome() {
 /* ---------- 填入「下一次崇拜」資訊卡 ---------- */
 function renderNextService() {
   const service = data.nextService;
+  if (!service) {
+    $("#next-service-card").innerHTML = `
+      <div class="service-card-banner">
+        <p>主日崇拜</p>
+        <h3>暫未有下一次崇拜資料</h3>
+      </div>
+    `;
+    return;
+  }
+
+  const scriptureLine = scheduleFromApi
+    ? `<p>經文 ${escapeHtml(service.scripture || "待定")}</p>`
+    : "";
 
   $("#next-service-card").innerHTML = `
     <div class="service-card-banner">
-      <p>主日崇拜 · ${service.time}</p>
-      <h3>${service.theme}</h3>
+      <p>主日崇拜 · ${escapeHtml(service.time)}</p>
+      <h3>${escapeHtml(service.theme)}</h3>
+      ${scriptureLine}
     </div>
     <div class="service-meta">
-      <div class="meta-item"><span>日期</span><strong>${service.date}</strong></div>
-      <div class="meta-item"><span>講題</span><strong>${service.theme}</strong></div>
-      <div class="meta-item"><span>MC</span><strong>${service.mc}</strong></div>
-      <div class="meta-item"><span>敬拜主領</span><strong>${service.worshipLeader}</strong></div>
-      <div class="meta-item"><span>結他</span><strong>${service.guitar}</strong></div>
-      <div class="meta-item"><span>IT</span><strong>${service.it}</strong></div>
-      <div class="meta-item"><span>聖餐牧師</span><strong>${service.communionPastor}</strong></div>
-      <div class="meta-item"><span>聖餐安排</span><strong>${service.communionArrangement}</strong></div>
+      <div class="meta-item"><span>日期</span><strong>${escapeHtml(service.date)}</strong></div>
+      <div class="meta-item"><span>講道</span><strong>${escapeHtml(service.theme)}</strong></div>
+      <div class="meta-item"><span>MC</span><strong>${escapeHtml(service.mc)}</strong></div>
+      <div class="meta-item"><span>敬拜主領</span><strong>${escapeHtml(service.worshipLeader)}</strong></div>
+      <div class="meta-item"><span>結他</span><strong>${escapeHtml(service.guitar)}</strong></div>
+      <div class="meta-item"><span>IT</span><strong>${escapeHtml(service.it)}</strong></div>
+      <div class="meta-item"><span>聖餐牧師</span><strong>${escapeHtml(service.communionPastor)}</strong></div>
+      <div class="meta-item"><span>聖餐安排</span><strong>${escapeHtml(service.communionArrangement)}</strong></div>
     </div>
   `;
 }
@@ -204,17 +526,22 @@ function renderRoster() {
 
   $("#roster-body").innerHTML = data.roster
     .map((row) => {
-      const isNext = data.nextService.date.includes(row.date);
+      const isNext = Boolean(
+        data.nextService &&
+          row.isoDate &&
+          data.nextService.isoDate &&
+          row.isoDate === data.nextService.isoDate
+      );
       return `
         <tr class="${isNext ? "is-next" : ""}">
-          <td>${row.date}</td>
-          <td>${row.theme}</td>
-          <td>${row.mc}</td>
-          <td>${row.worshipLeader}</td>
-          <td>${row.guitar}</td>
-          <td>${row.it}</td>
-          <td>${row.communionPastor}</td>
-          <td>${row.communionArrangement}</td>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${escapeHtml(row.theme)}</td>
+          <td>${escapeHtml(row.mc)}</td>
+          <td>${escapeHtml(row.worshipLeader)}</td>
+          <td>${escapeHtml(row.guitar)}</td>
+          <td>${escapeHtml(row.it)}</td>
+          <td>${escapeHtml(row.communionPastor)}</td>
+          <td>${escapeHtml(row.communionArrangement)}</td>
         </tr>
       `;
     })
@@ -303,4 +630,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setupFormButtons();
   setupMobileMenu();
   setupActiveNav();
+  setScheduleSyncStatus("資料來源：網站暫存資料");
+  loadScheduleFromApi();
 });
