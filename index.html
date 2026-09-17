@@ -82,7 +82,7 @@
       <section class="section" aria-labelledby="next-service-title">
         <div class="section-heading">
           <h2 id="next-service-title">下一次崇拜</h2>
-          <p>本週服事崗位一覽，資料可在 app.js 更新。</p>
+          <p>本週服事崗位一覽，資料可在 google sheet 更新。</p>
           <!-- API 失敗時才顯示；成功或使用 placeholder 時保持隱藏 -->
           <p class="schedule-notice" id="schedule-fallback-notice" hidden aria-live="polite">
             目前顯示暫存更表，請稍後重新整理。
@@ -96,7 +96,7 @@
       <section class="section" aria-labelledby="actions-title">
         <div class="section-heading">
           <h2 id="actions-title">常用功能</h2>
-          <p>第一版先用佔位連結，日後可改成 Google 表單或簡報網址。</p>
+          <p>請按需要提交申請、歌單初稿或開啟當日崇拜簡報。</p>
         </div>
 
         <!-- 常用功能按鈕：網址來自 app.js 的 data.links -->
@@ -130,12 +130,13 @@
         </div>
       </section>
 
-      <!-- 近日待辦：歌單初稿、家事截止、PPT 定稿 -->
+      <!-- 近日待辦：由 Google Sheet「近日待辦事項」經現有 JSONP API 載入 -->
       <section id="prep" class="section" aria-labelledby="todo-title">
         <div class="section-heading">
           <h2 id="todo-title">近日待辦事項</h2>
           <p>崇拜預備相關時程，提醒同工按時完成。</p>
         </div>
+        <p class="todo-status" id="todo-status" aria-live="polite">正在載入待辦事項…</p>
         <ul class="todo-list" id="todo-list"></ul>
       </section>
 
@@ -146,10 +147,7 @@
           <p>請主領於截止前以表單提交本週歌單。</p>
         </div>
         <div class="info-panel">
-          <p>
-            第一版尚未連接表單。之後可把「提交歌單初稿」按鈕改成 Google Form
-            連結，用法會與提交家事相同。
-          </p>
+          <p>敬拜主領請於崇拜前最少 7 日提交歌單初稿。</p>
           <a class="panel-link" id="song-draft-button" href="#">提交歌單初稿</a>
         </div>
       </section>
@@ -161,10 +159,7 @@
           <p>收集主日家事、代禱與感恩事項。</p>
         </div>
         <div class="info-panel">
-          <p>
-            請於截止日前把家事交給崇拜部。第一版尚未連接表單，之後可把
-            「提交家事」按鈕改成 Google Form 連結。
-          </p>
+          <p>任何人任何時候都可以提交，崇拜部會負責審批。</p>
           <a class="panel-link" id="housework-button" href="#">提交家事</a>
         </div>
       </section>
@@ -176,10 +171,7 @@
           <p>歌單、流程、守則與常用範本。</p>
         </div>
         <div class="info-panel">
-          <p>
-            文件庫將於下一版本接上 Google Drive 或共用資料夾。現階段請先透過
-            崇拜部同工索取所需檔案。
-          </p>
+          <p>由於此階段為公測版所以尚未開發，也不要太期待，反正你其實並不是那麼需要。</p>
         </div>
       </section>
 
@@ -190,10 +182,7 @@
           <p>第一版只做前端介面，尚未連接登入或後台。</p>
         </div>
         <div class="info-panel">
-          <p>
-            日後可用 Google 試算表或 Apps Script 管理更表與家事。現階段無需登入，
-            所有顯示內容都來自 app.js 的假資料。
-          </p>
+          <p>已經可以用Google sheet管理Portal內容，免費資源真好哦! :)</p>
         </div>
       </section>
     </main>

@@ -109,27 +109,8 @@ const data = {
     }
   ],
 
-  // 近日待辦事項
-  todos: [
-    {
-      title: "歌單初稿",
-      due: "9月16日（二）晚上 9:00 前",
-      note: "請主領以表單提交歌單初稿，交崇拜部核對。",
-      status: "進行中"
-    },
-    {
-      title: "家事截止",
-      due: "9月18日（四）中午 12:00 前",
-      note: "代禱、感恩與教會通告請於截止前交齊。",
-      status: "待辦"
-    },
-    {
-      title: "PPT 定稿",
-      due: "9月19日（五）晚上 8:00 前",
-      note: "歌詞、經文與家事投影片需完成最後校對。",
-      status: "待辦"
-    }
-  ],
+  // 近日待辦改由 API 的 todos 陣列載入；這裡只保留空陣列作結構，不再寫死內容
+  todos: [],
 
   /*
     常用功能按鈕的連結。
@@ -143,7 +124,7 @@ const data = {
     - ppt:           Google Slides 崇拜 PPT，或 Apps Script 網頁連結
   */
   links: {
-    roster: "#", // 日後可貼上 Google Drive / Google Sheets 更表連結
+    roster: "#roster", // 跳到本頁「本月崇拜更表」區塊
     changeRequest:
       "https://docs.google.com/forms/d/e/1FAIpQLSf8GXdgNfydA0QzMfdnzz0rWkBmdrmk_mSj71BgWwQ1_esFVQ/viewform?usp=dialog",
     songDraft:
@@ -269,6 +250,7 @@ function useFallbackSchedule(showNotice) {
   if ($("#roster-body")) renderRoster();
   setScheduleSyncStatus("資料來源：網站暫存資料");
   showFallbackNotice(Boolean(showNotice));
+  showTodoNotice("待辦事項暫時未能更新，請稍後重新整理。", true);
 }
 
 function mapApiRowToRoster(row) {
@@ -371,6 +353,7 @@ function applyLiveSchedule(payload) {
 
   renderNextService();
   renderRoster();
+  applyLiveTodos(payload);
   setScheduleSyncStatus(`最後同步：${payload.updatedAt || "—"}`);
   showFallbackNotice(false);
 }
@@ -445,7 +428,7 @@ function renderNextService() {
   if (!service) {
     $("#next-service-card").innerHTML = `
       <div class="service-card-banner">
-        <p>主日崇拜</p>
+        <p>天地會崇拜</p>
         <h3>暫未有下一次崇拜資料</h3>
       </div>
     `;
@@ -458,7 +441,7 @@ function renderNextService() {
 
   $("#next-service-card").innerHTML = `
     <div class="service-card-banner">
-      <p>主日崇拜 · ${escapeHtml(service.time)}</p>
+      <p>天地會崇拜 · ${escapeHtml(service.time)}</p>
       <h3>${escapeHtml(service.theme)}</h3>
       ${scriptureLine}
     </div>
@@ -554,17 +537,151 @@ function renderRoster() {
 }
 
 /* ---------- 近日待辦事項 ---------- */
-function renderTodos() {
-  $("#todo-list").innerHTML = data.todos
+function isTruthyDisplay(value) {
+  if (value === true || value === 1) return true;
+  const text = String(value ?? "").trim().toUpperCase();
+  return text === "TRUE" || text === "是" || text === "1" || text === "YES";
+}
+
+function normalizeTodoDate(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+  const parsed = parseISODate(text);
+  return parsed ? formatIsoFromDate(parsed) : "";
+}
+
+function formatIsoFromDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeTodo(row) {
+  if (!row || typeof row !== "object") return null;
+  const title = String(row["事項"] || row.title || "").trim();
+  if (!title) return null;
+
+  const displayRaw = row["顯示"] ?? row.visible;
+  const visible = displayRaw === undefined || displayRaw === ""
+    ? true
+    : isTruthyDisplay(displayRaw);
+
+  const status = String(row["狀態"] || row.status || "未開始").trim() || "未開始";
+
+  return {
+    date: normalizeTodoDate(row["日期"] || row.date),
+    title,
+    owner: String(row["負責人"] || row.owner || "").trim(),
+    due: normalizeTodoDate(row["截止日期"] || row.due),
+    status,
+    note: String(row["備註"] || row.note || "").trim(),
+    visible
+  };
+}
+
+function compareTodos(a, b) {
+  if (a.due && !b.due) return -1;
+  if (!a.due && b.due) return 1;
+  if (a.due && b.due && a.due !== b.due) return a.due.localeCompare(b.due);
+  return String(b.date || "").localeCompare(String(a.date || ""));
+}
+
+function getTodoUrgency(todo, todayHongKong) {
+  if (!todo.due) return "";
+  if (todo.due < todayHongKong) return "overdue";
+  const dueDate = parseISODate(todo.due);
+  const today = parseISODate(todayHongKong);
+  if (!dueDate || !today) return "";
+  const diffDays = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+  if (diffDays >= 0 && diffDays <= 7) return "soon";
+  return "";
+}
+
+function statusClassName(status) {
+  if (status === "已完成") return "is-done";
+  if (status === "進行中") return "is-progress";
+  if (status === "暫停") return "is-paused";
+  return "is-idle";
+}
+
+function showTodoNotice(message, isError) {
+  const statusEl = $("#todo-status");
+  const listEl = $("#todo-list");
+  if (listEl) listEl.innerHTML = "";
+  if (!statusEl) return;
+  statusEl.hidden = false;
+  statusEl.textContent = message;
+  statusEl.classList.toggle("is-error", Boolean(isError));
+}
+
+function applyLiveTodos(payload) {
+  try {
+    const raw = Array.isArray(payload && payload.todos) ? payload.todos : [];
+    const todayHongKong = getTodayHongKong();
+    data.todos = raw
+      .map(normalizeTodo)
+      .filter((item) => item && item.visible && item.status !== "已完成")
+      .sort(compareTodos);
+    renderTodos(todayHongKong);
+  } catch (error) {
+    console.error("Todos error:", error);
+    showTodoNotice("待辦事項暫時未能更新，請稍後重新整理。", true);
+  }
+}
+
+function renderTodos(todayHongKong) {
+  const listEl = $("#todo-list");
+  const statusEl = $("#todo-status");
+  if (!listEl) return;
+
+  const today = todayHongKong || getTodayHongKong();
+  const items = Array.isArray(data.todos) ? data.todos : [];
+
+  if (!items.length) {
+    showTodoNotice("暫時沒有近日待辦事項。", false);
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.hidden = true;
+    statusEl.textContent = "";
+    statusEl.classList.remove("is-error");
+  }
+
+  listEl.innerHTML = items
     .map((item) => {
-      const doneClass = item.status === "已完成" ? "is-done" : "";
+      const urgency = getTodoUrgency(item, today);
+      const metaParts = [];
+      if (item.owner) metaParts.push(`負責人：${escapeHtml(item.owner)}`);
+      if (item.due) metaParts.push(`截止日期：${escapeHtml(formatShortDate(item.due))}`);
+      const flags = [];
+      if (urgency === "overdue") {
+        flags.push('<span class="todo-flag is-overdue">已逾期</span>');
+      }
+      if (urgency === "soon") {
+        flags.push('<span class="todo-flag is-soon">即將到期</span>');
+      }
+      flags.push(
+        `<span class="status ${statusClassName(item.status)}">${escapeHtml(item.status)}</span>`
+      );
       return `
-        <li class="todo-item">
+        <li class="todo-item${urgency === "overdue" ? " is-overdue" : ""}">
           <div>
-            <h3>${item.title}</h3>
-            <p>${item.due}<br />${item.note}</p>
+            <h3>${escapeHtml(item.title)}</h3>
+            ${metaParts.length ? `<p>${metaParts.join("<br />")}</p>` : ""}
           </div>
-          <span class="status ${doneClass}">${item.status}</span>
+          <div class="todo-flags">${flags.join("")}</div>
         </li>
       `;
     })
@@ -640,7 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderNextService();
   renderActions();
   renderRoster();
-  renderTodos();
+  showTodoNotice("正在載入待辦事項…", false);
   setupFormButtons();
   setupMobileMenu();
   setupActiveNav();

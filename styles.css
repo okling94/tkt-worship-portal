@@ -416,6 +416,56 @@ main {
   color: var(--todo-done);
 }
 
+.status.is-progress {
+  color: var(--forest-deep);
+}
+
+.status.is-paused {
+  color: var(--muted);
+}
+
+.status.is-idle {
+  color: var(--todo-open);
+}
+
+.todo-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.todo-flag {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: var(--stone);
+}
+
+.todo-flag.is-soon {
+  color: var(--gold);
+}
+
+.todo-flag.is-overdue {
+  color: var(--todo-open);
+}
+
+.todo-item.is-overdue {
+  border-color: #e4cfc4;
+}
+
+.todo-status {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 0 0 0.8rem;
+}
+
+.todo-status.is-error {
+  color: var(--todo-open);
+}
+
 .info-panel {
   background: var(--paper);
   border: 1px solid var(--line);
