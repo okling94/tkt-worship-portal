@@ -475,6 +475,54 @@ main {
   box-shadow: var(--shadow);
 }
 
+.approved-block {
+  color: var(--muted);
+}
+
+.approved-status {
+  margin: 0;
+}
+
+.approved-status.is-error {
+  color: var(--todo-open);
+}
+
+.approved-meta {
+  margin: 0 0 0.35rem;
+}
+
+.approved-song-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.approved-song-list li {
+  margin: 0.15rem 0;
+}
+
+.approved-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.9rem;
+}
+
+.approved-announcement {
+  margin: 0 0 0.95rem;
+}
+
+.approved-announcement:last-child {
+  margin-bottom: 0;
+}
+
+.approved-announcement h3 {
+  font-size: 1.05rem;
+  color: var(--ink);
+  margin-bottom: 0.25rem;
+}
+
+.approved-announcement p {
+  white-space: pre-wrap;
+}
+
 .panel-link {
   display: inline-block;
   margin-top: 1rem;

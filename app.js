@@ -48,7 +48,7 @@ const data = {
     name: "天地福音堂",
     portalName: "崇拜部 Portal",
     welcome:
-      "願主的平安與你同在。這裡是崇拜部同工的工作入口，方便大家查看更表、預備崇拜、提交家事，並一同服事。"
+      "願主的平安與你同在。這裡是崇拜部同工的工作入口，方便大家查看更表、預備崇拜、提交報告事項，並一同服事。"
   },
 
   // 下一次崇拜資訊卡
@@ -109,8 +109,10 @@ const data = {
     }
   ],
 
-  // 近日待辦改由 API 的 todos 陣列載入；這裡只保留空陣列作結構，不再寫死內容
+  // 近日待辦、已批准歌單、已批准家事都由 API 載入；這裡只保留空陣列作結構
   todos: [],
+  approvedSongs: [],
+  approvedAnnouncements: [],
 
   /*
     常用功能按鈕的連結。
@@ -338,6 +340,8 @@ function applyLiveSchedule(payload) {
 
   if (!rows.length) {
     useFallbackSchedule(true);
+    applyLiveApprovedSongs(payload);
+    applyLiveApprovedAnnouncements(payload);
     return;
   }
 
@@ -354,6 +358,8 @@ function applyLiveSchedule(payload) {
   renderNextService();
   renderRoster();
   applyLiveTodos(payload);
+  applyLiveApprovedSongs(payload);
+  applyLiveApprovedAnnouncements(payload);
   setScheduleSyncStatus(`最後同步：${payload.updatedAt || "—"}`);
   showFallbackNotice(false);
 }
@@ -373,17 +379,23 @@ function loadScheduleFromApi() {
     try {
       if (!payload || payload.ok !== true || !Array.isArray(payload.schedule)) {
         useFallbackSchedule(true);
+        applyLiveApprovedSongs(payload);
+        applyLiveApprovedAnnouncements(payload);
         return;
       }
       applyLiveSchedule(payload);
     } catch (error) {
       console.error("Schedule API error:", error);
       useFallbackSchedule(true);
+      showApprovedSongsNotice("已批准歌單暫時未能更新，請稍後重新整理。", true);
+      showApprovedAnnouncementsNotice("已批准報告事項暫時未能更新，請稍後重新整理。", true);
     }
   };
 
   if (!isScheduleApiConfigured()) {
     useFallbackSchedule(false);
+    showApprovedSongsNotice("暫未有已批准的歌單。", false);
+    showApprovedAnnouncementsNotice("暫未有下一次崇拜的已批准報告事項。", false);
     return;
   }
 
@@ -404,6 +416,8 @@ function loadScheduleFromApi() {
     if (pending) pending.remove();
     console.error("Schedule API error:", "timeout");
     useFallbackSchedule(true);
+    showApprovedSongsNotice("已批准歌單暫時未能更新，請稍後重新整理。", true);
+    showApprovedAnnouncementsNotice("已批准報告事項暫時未能更新，請稍後重新整理。", true);
   }, SCHEDULE_TIMEOUT_MS);
 
   const script = document.createElement("script");
@@ -481,7 +495,7 @@ function renderActions() {
     },
     {
       href: data.links.housework,
-      title: "提交家事",
+      title: "提交報告事項",
       desc: "代禱與通告",
       icon: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 3h12v18H6V3zm2 2v14h8V5H8zm1 2h6v2H9V7zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>'
     },
@@ -745,6 +759,201 @@ function applyExternalLink(el, url) {
   }
 }
 
+/* ---------- 已批准歌單／家事（失敗時只改這兩塊，不動更表與待辦） ---------- */
+function splitSongTitles(value) {
+  return String(value ?? "")
+    .split(/\r\n|\n|\r|\||｜/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function showApprovedPanelNotice(statusId, contentId, message, isError) {
+  const statusEl = document.getElementById(statusId);
+  const contentEl = document.getElementById(contentId);
+  if (contentEl) contentEl.innerHTML = "";
+  if (!statusEl) return;
+  statusEl.hidden = false;
+  statusEl.textContent = message;
+  statusEl.classList.toggle("is-error", Boolean(isError));
+}
+
+function showApprovedSongsNotice(message, isError) {
+  showApprovedPanelNotice("approved-songs-status", "approved-songs-content", message, isError);
+}
+
+function showApprovedAnnouncementsNotice(message, isError) {
+  showApprovedPanelNotice(
+    "approved-announcements-status",
+    "approved-announcements-content",
+    message,
+    isError
+  );
+}
+
+function hideApprovedPanelNotice(statusId) {
+  const statusEl = document.getElementById(statusId);
+  if (!statusEl) return;
+  statusEl.hidden = true;
+  statusEl.textContent = "";
+  statusEl.classList.remove("is-error");
+}
+
+function normalizeApprovedSong(row) {
+  if (!row || typeof row !== "object") return null;
+  const serviceDate = normalizeTodoDate(row["崇拜日期"] || row.worshipDate || row.serviceDate);
+  const tracks = splitSongTitles(row["曲目"] || row.songs || row.title);
+  if (!serviceDate || !tracks.length) return null;
+  return {
+    serviceDate,
+    tracks,
+    leader: String(row["敬拜主領"] || row.worshipLeader || "").trim(),
+    note: String(row["備註"] || row.note || "").trim()
+  };
+}
+
+function groupApprovedSongsByDate(rows) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const item = normalizeApprovedSong(row);
+    if (!item) return;
+    if (!groups.has(item.serviceDate)) {
+      groups.set(item.serviceDate, {
+        serviceDate: item.serviceDate,
+        tracks: [],
+        leaders: [],
+        notes: []
+      });
+    }
+    const group = groups.get(item.serviceDate);
+    item.tracks.forEach((track) => {
+      if (!group.tracks.includes(track)) group.tracks.push(track);
+    });
+    if (item.leader && !group.leaders.includes(item.leader)) group.leaders.push(item.leader);
+    if (item.note && !group.notes.includes(item.note)) group.notes.push(item.note);
+  });
+  return groups;
+}
+
+function pickNearestApprovedSongGroup(groups, todayHongKong) {
+  const dates = [...groups.keys()].sort();
+  if (!dates.length) return null;
+  const upcoming = dates.find((date) => date >= todayHongKong);
+  if (upcoming) return groups.get(upcoming) || null;
+  return groups.get(dates[dates.length - 1]) || null;
+}
+
+function renderApprovedSongs(group) {
+  const contentEl = $("#approved-songs-content");
+  if (!contentEl || !group) return;
+
+  hideApprovedPanelNotice("approved-songs-status");
+  const leaderText = group.leaders.length ? group.leaders.join("、") : "待定";
+  const tracksHtml = group.tracks
+    .map((track) => `<li>${escapeHtml(track)}</li>`)
+    .join("");
+  const notesHtml = group.notes.length
+    ? `<p class="approved-note">備註：${escapeHtml(group.notes.join("；"))}</p>`
+    : "";
+
+  contentEl.innerHTML = `
+    <p class="approved-meta">崇拜日期：${escapeHtml(formatLongDate(group.serviceDate))}</p>
+    <p class="approved-meta">敬拜主領：${escapeHtml(leaderText)}</p>
+    <ul class="approved-song-list">${tracksHtml}</ul>
+    ${notesHtml}
+  `;
+}
+
+function applyLiveApprovedSongs(payload) {
+  try {
+    if (!payload || !Array.isArray(payload.approvedSongs)) {
+      data.approvedSongs = [];
+      showApprovedSongsNotice("暫未有已批准的歌單。", false);
+      return;
+    }
+
+    const groups = groupApprovedSongsByDate(payload.approvedSongs);
+    data.approvedSongs = payload.approvedSongs;
+    const group = pickNearestApprovedSongGroup(groups, getTodayHongKong());
+    if (!group) {
+      showApprovedSongsNotice("暫未有已批准的歌單。", false);
+      return;
+    }
+    renderApprovedSongs(group);
+  } catch (error) {
+    console.error("Approved songs error:", error);
+    showApprovedSongsNotice("已批准歌單暫時未能更新，請稍後重新整理。", true);
+  }
+}
+
+function normalizeApprovedAnnouncement(row) {
+  if (!row || typeof row !== "object") return null;
+  const announceDate = normalizeTodoDate(
+    row["公告日期"] || row.announceDate || row.date
+  );
+  const title = String(row["標題"] || row.title || "").trim();
+  const body = String(row["內容"] || row.body || row.content || "").trim();
+  if (!announceDate || (!title && !body)) return null;
+  return {
+    announceDate,
+    title,
+    body,
+    inPpt: isTruthyDisplay(row["是否放入PPT"] || row.inPpt)
+  };
+}
+
+function renderApprovedAnnouncements(items) {
+  const contentEl = $("#approved-announcements-content");
+  if (!contentEl) return;
+
+  hideApprovedPanelNotice("approved-announcements-status");
+  contentEl.innerHTML = items
+    .map((item) => {
+      const pptLine = item.inPpt
+        ? `<p class="approved-note">已放入 PPT</p>`
+        : "";
+      return `
+        <article class="approved-announcement">
+          <h3>${escapeHtml(item.title || "報告事項")}</h3>
+          ${item.body ? `<p>${escapeHtml(item.body)}</p>` : ""}
+          ${pptLine}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function applyLiveApprovedAnnouncements(payload) {
+  try {
+    if (!payload || !Array.isArray(payload.approvedAnnouncements)) {
+      data.approvedAnnouncements = [];
+      showApprovedAnnouncementsNotice("暫未有下一次崇拜的已批准報告事項。", false);
+      return;
+    }
+
+    data.approvedAnnouncements = payload.approvedAnnouncements;
+    const nextIso = data.nextService && data.nextService.isoDate
+      ? String(data.nextService.isoDate).trim()
+      : "";
+    if (!nextIso) {
+      showApprovedAnnouncementsNotice("暫未有下一次崇拜的已批准報告事項。", false);
+      return;
+    }
+
+    const items = payload.approvedAnnouncements
+      .map(normalizeApprovedAnnouncement)
+      .filter((item) => item && item.announceDate === nextIso);
+
+    if (!items.length) {
+      showApprovedAnnouncementsNotice("暫未有下一次崇拜的已批准報告事項。", false);
+      return;
+    }
+    renderApprovedAnnouncements(items);
+  } catch (error) {
+    console.error("Approved announcements error:", error);
+    showApprovedAnnouncementsNotice("已批准報告事項暫時未能更新，請稍後重新整理。", true);
+  }
+}
+
 /* ---------- 把說明區塊裡的提交按鈕，接到同一個 data.links ---------- */
 function setupFormButtons() {
   applyExternalLink($("#song-draft-button"), data.links.songDraft);
@@ -758,6 +967,8 @@ document.addEventListener("DOMContentLoaded", () => {
   renderActions();
   renderRoster();
   showTodoNotice("正在載入待辦事項…", false);
+  showApprovedSongsNotice("正在載入已批准歌單…", false);
+  showApprovedAnnouncementsNotice("正在載入已批准報告事項…", false);
   setupFormButtons();
   setupMobileMenu();
   setupActiveNav();
