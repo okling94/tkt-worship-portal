@@ -490,7 +490,7 @@ function renderActions() {
     {
       href: data.links.songDraft,
       title: "提交歌單初稿",
-      desc: "主領交歌單",
+      desc: "由於有上載歌譜需要，暫需要登入google account才能進入此表單。",
       icon: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M18 3v10.55A4 4 0 1 1 16 10V7h-6v8.55A4 4 0 1 1 8 12V3h10z"/></svg>'
     },
     {
