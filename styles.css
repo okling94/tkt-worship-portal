@@ -505,6 +505,17 @@ main {
   font-size: 0.9rem;
 }
 
+.approved-note a {
+  color: var(--forest);
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.approved-note a:hover,
+.approved-note a:focus-visible {
+  color: var(--forest-deep);
+}
+
 .approved-announcement {
   margin: 0 0 0.95rem;
 }

@@ -842,6 +842,65 @@ function pickNearestApprovedSongGroup(groups, todayHongKong) {
   return groups.get(dates[dates.length - 1]) || null;
 }
 
+function isSafeHttpUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text || /\s/.test(text)) return false;
+  if (!/^https?:\/\/\S+$/i.test(text)) return false;
+  try {
+    const parsed = new URL(text);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      Boolean(parsed.hostname)
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function buildSafeHttpLink(rawUrl, label) {
+  const href = new URL(String(rawUrl).trim()).href;
+  const text = String(label || href).trim() || href;
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
+}
+
+function linkifyApprovedNoteText(text) {
+  const source = String(text ?? "");
+  const pattern = /https?:\/\/[^\s<>"']+/gi;
+  let html = "";
+  let lastIndex = 0;
+  let match = pattern.exec(source);
+  while (match) {
+    html += escapeHtml(source.slice(lastIndex, match.index));
+    const candidate = match[0];
+    html += isSafeHttpUrl(candidate)
+      ? buildSafeHttpLink(candidate, candidate)
+      : escapeHtml(candidate);
+    lastIndex = match.index + candidate.length;
+    match = pattern.exec(source);
+  }
+  html += escapeHtml(source.slice(lastIndex));
+  return html;
+}
+
+function formatApprovedSongNoteLine(line) {
+  const named = String(line ?? "").match(/^(.+?)([：:])(\s*)(https?:\/\/\S+)\s*$/i);
+  if (named) {
+    const label = named[1].trim();
+    const url = named[4];
+    if (label && isSafeHttpUrl(url)) {
+      return buildSafeHttpLink(url, label);
+    }
+  }
+  return linkifyApprovedNoteText(line);
+}
+
+function formatApprovedSongNote(text) {
+  return String(text ?? "")
+    .split(/\r\n|\n|\r/)
+    .map(formatApprovedSongNoteLine)
+    .join("<br>");
+}
+
 function renderApprovedSongs(group) {
   const contentEl = $("#approved-songs-content");
   if (!contentEl || !group) return;
@@ -851,8 +910,9 @@ function renderApprovedSongs(group) {
   const tracksHtml = group.tracks
     .map((track) => `<li>${escapeHtml(track)}</li>`)
     .join("");
-  const notesHtml = group.notes.length
-    ? `<p class="approved-note">備註：${escapeHtml(group.notes.join("；"))}</p>`
+  const notesBody = group.notes.map(formatApprovedSongNote).filter(Boolean).join("<br>");
+  const notesHtml = notesBody
+    ? `<p class="approved-note">備註：<br>${notesBody}</p>`
     : "";
 
   contentEl.innerHTML = `
